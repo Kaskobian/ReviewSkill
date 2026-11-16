@@ -1,0 +1,5 @@
+#!/bin/sh
+# review-hooks: check the commit message format (no AI, offline, instant).
+# Bypass once: git commit --no-verify
+command -v node >/dev/null 2>&1 || { echo "review-hooks: node not found, skipping message check" >&2; exit 0; }
+exec node "$(dirname "$0")/../bin/review-hooks.mjs" msg "$1"

@@ -1,0 +1,6 @@
+#!/bin/sh
+# review-hooks: before a push, check branch name, commit messages, secrets
+# and (if enabled) that the AI review is current. Never calls an AI itself.
+# Bypass once: git push --no-verify
+command -v node >/dev/null 2>&1 || { echo "review-hooks: node not found, skipping pre-push checks" >&2; exit 0; }
+exec node "$(dirname "$0")/../bin/review-hooks.mjs" pre-push

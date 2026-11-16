@@ -1,0 +1,6 @@
+# Hook scripts and shell scripts must keep LF endings, or sh fails on Linux/macOS.
+*.sh text eol=lf
+review-hooks/hooks/* text eol=lf
+*.mjs text eol=lf
+*.py text eol=lf
+*.exe binary
