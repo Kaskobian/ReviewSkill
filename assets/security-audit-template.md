@@ -19,7 +19,7 @@ Procedure: [OWASP Security Audit](../reference/owasp-security-audit.md). Fixing:
 | Check | Command | Result |
 |-------|---------|--------|
 | Security scan | `python scripts/security-scan.py <path>` | [N candidates: X high / Y medium / Z low] |
-| Dependency audit | [`npm audit` / `pip-audit` / ...] | [real result, or "not run: reason"] |
+| Dependency audit | `python scripts/dep-audit.py <path>` | [N packages, X advisories, Y in CISA KEV; or "not run: reason"] |
 | Tests | [command] | [real result, or "not run: reason"] |
 
 > Report a check as passing only after seeing it pass.

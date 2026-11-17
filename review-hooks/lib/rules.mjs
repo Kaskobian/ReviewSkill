@@ -14,6 +14,7 @@ export const DEFAULTS = Object.freeze({
   agent: "claude",                   // "claude" | { command, args }
   agentTimeoutSeconds: 900,
   maxDiffBytes: 500000,
+  dependencies: {},                  // known-vulnerable dependency check, see lib/deps/check.mjs
 });
 
 const CONVENTIONAL = /^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)(\([a-z0-9._\/-]+\))?!?: \S/;

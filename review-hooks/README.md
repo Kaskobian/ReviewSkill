@@ -3,8 +3,8 @@
 Git hooks that enforce team rules with plain code, plus an **optional** AI
 review that you run when you want it.
 
-- **Deterministic first.** Branch names, commit messages and secret
-  detection are checked by regular expressions with exit codes. Nothing is
+- **Deterministic first.** Branch names, commit messages, secrets and
+  known-vulnerable dependency versions are checked by plain code with exit codes. Nothing is
   sent to an AI to decide whether a commit or push is allowed.
 - **AI is opt-in.** `aiReview` is `off` by default. Turn it on as `advisory`
   (shows a warning) or `required` (blocks the push until a review matches
@@ -15,7 +15,7 @@ review that you run when you want it.
 | Hook | Runs | Checks |
 |---|---|---|
 | `commit-msg` | every commit | message format |
-| `pre-push` | every push | branch name, every pushed commit's message, secrets in every pushed commit, AI review status |
+| `pre-push` | every push | branch name, every pushed commit's message, secrets in every pushed commit, vulnerable dependencies (only when a lock file changed), AI review status |
 
 ## Install
 
@@ -36,7 +36,10 @@ an existing `core.hooksPath` (Husky, lefthook, and so on).
 node review-hooks/bin/review-hooks.mjs check    # everything, for the current branch (add --json for CI)
 node review-hooks/bin/review-hooks.mjs review   # run the AI review now
 node review-hooks/bin/review-hooks.mjs status   # last AI review and whether it is still current
+node review-hooks/bin/review-hooks.mjs deps     # known-vulnerable dependencies (--verbose, --json)
 ```
+
+`--no-deps` (or `REVIEW_HOOKS_NO_DEPS=1`) skips the network dependency check.
 
 Bypass a hook once with `git commit --no-verify` or `git push --no-verify`.
 Hooks are a convenience, not a security boundary: run `check --json` in CI
@@ -60,7 +63,17 @@ Optional `.review-hooks.json` at the repository root. Defaults shown:
   "aiReview": "off",
   "agent": "claude",
   "agentTimeoutSeconds": 900,
-  "maxDiffBytes": 500000
+  "maxDiffBytes": 500000,
+  "dependencies": {
+    "enabled": true,
+    "failOn": "critical",
+    "failOnKev": true,
+    "warnOn": "medium",
+    "offline": "warn",
+    "nvd": "gaps",
+    "nvdMaxLookups": 10,
+    "ignore": []
+  }
 }
 ```
 
@@ -73,6 +86,52 @@ Optional `.review-hooks.json` at the repository root. Defaults shown:
 - `skillFile`: optional path to a review method to include in the prompt.
   Defaults to the `SKILL.md` next to this folder, if present.
 - `REVIEW_HOOKS_BASE` environment variable overrides `baseBranch`.
+
+## Dependency check (no AI)
+
+Reads the dependency files **committed** at the pushed commit and asks public
+vulnerability databases about the exact versions:
+
+| Source | Used for | Key |
+|---|---|---|
+| [OSV.dev](https://osv.dev) | Affected versions, the fixed version, CVSS vector | none |
+| [CISA KEV](https://www.cisa.gov/known-exploited-vulnerabilities-catalog) | Is the CVE exploited in the wild | none |
+| [NIST NVD](https://nvd.nist.gov) | CVSS score and CWE when OSV has none | optional `NVD_API_KEY` |
+
+Files: `package-lock.json`, `pnpm-lock.yaml`, `yarn.lock`,
+`packages.lock.json`, `*.csproj`/`*.fsproj`/`*.vbproj`,
+`Directory.Packages.props`, `packages.config`, `requirements*.txt`,
+`poetry.lock`, `uv.lock`, `Pipfile.lock`, `go.mod`, `Cargo.lock`,
+`composer.lock`, `Gemfile.lock`, `gradle.lockfile`. Only exact versions;
+ranges, variables and git/path dependencies are skipped, never guessed.
+
+Policy:
+
+- **Only what the branch introduces can fail.** A vulnerable version already
+  on `baseBranch` is a warning, so nobody is blocked by inherited debt.
+- An introduced package fails at `failOn` (default `critical`), or at any
+  severity when the CVE is in CISA KEV (`failOnKev`).
+- The suggested upgrade is the lowest version fixing every listed advisory,
+  re-checked against OSV.
+- OSV unreachable is a warning ("NOT checked"), never a silent pass;
+  `"offline": "fail"` makes it blocking for CI.
+- `pre-push` only calls the network when a dependency file changed in the
+  pushed commits.
+- Exceptions need a reason and an expiry date:
+  `{ "id": "CVE-2021-23337", "package": "lodash", "reason": "template() not used with user input", "until": "2027-03-31" }`.
+
+**NVD key.** Optional: by default NVD is asked only about CVEs OSV could not
+score. Without a key lookups are spaced 6 s apart (NVD's public limit) and
+capped per run. Get one at <https://nvd.nist.gov/developers/request-an-api-key>
+and set `NVD_API_KEY` in your shell or CI secrets, never in the repository.
+NVD terms say a key must not be shared, so for a team use one key in CI.
+
+Results are cached in `.git/review-hooks/deps-cache/`. Mirrors: set
+`REVIEW_HOOKS_OSV_URL`, `REVIEW_HOOKS_KEV_URL`, `REVIEW_HOOKS_NVD_URL`.
+
+This product uses data from the NVD API but is not endorsed or certified by the NVD.
+
+The same lookup for any repository, without hooks: `python scripts/dep-audit.py <path>`.
 
 ## How the AI review works
 
@@ -101,6 +160,6 @@ is shown but never used to pass or fail anything. A person decides.
 ## Tests
 
 ```bash
-node --test review-hooks/tests/                    # unit + end-to-end (real git, fake agent)
+node --test review-hooks/tests/                    # unit + end-to-end (real git, fake agent, fake OSV server)
 bash review-hooks/tests/probe-claude-isolation.sh  # needs the real claude CLI
 ```

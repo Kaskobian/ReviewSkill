@@ -47,13 +47,15 @@ REQUIRED_FILES = [
     'scripts/test_pr_analyzer.py',
     'scripts/security-scan.py',
     'scripts/test_security_scan.py',
+    'scripts/dep-audit.py',
+    'scripts/test_dep_audit.py',
     'reference/owasp-security-audit.md',
     'reference/remediation-playbook.md',
     'assets/security-audit-template.md',
 ]
 
 # Every shipped test suite; all must pass.
-TEST_SUITES = ['scripts/test_pr_analyzer.py', 'scripts/test_security_scan.py']
+TEST_SUITES = ['scripts/test_pr_analyzer.py', 'scripts/test_security_scan.py', 'scripts/test_dep_audit.py']
 
 REQUIRED_DIRS = ['adapters', 'assets', 'reference', 'reference/cross-cutting', 'scripts']
 

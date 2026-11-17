@@ -45,12 +45,13 @@ It covers **20+ languages and frameworks** with over **21,000 lines** of careful
 - **Verification Gate** - Run tests/linters before the verdict when the environment allows; report honestly when they were not run.
 - **Security-First** - Dedicated security checklists per language ecosystem.
 - **OWASP Security Audits** - Full audit procedure mapped to OWASP Top 10:2025, API Security Top 10:2023 and LLM Top 10:2025. Every finding carries an OWASP category and CWE, plus a per-category coverage report. Backed by `scripts/security-scan.py`, a stdlib-only scanner with 70+ OWASP/CWE-mapped rules across 10 languages.
+- **Dependency Audit** - `scripts/dep-audit.py` checks the exact versions in your lock files against OSV.dev, flags anything in the CISA Known Exploited Vulnerabilities catalog, and can add NIST NVD scores. Covers npm, pnpm, yarn, NuGet, PyPI, Go, Cargo, Composer, RubyGems and Gradle. No AI, no guessing, no CVEs from memory.
 - **Safe Fixing** - A [remediation playbook](reference/remediation-playbook.md) for applying fixes one verified finding at a time. It targets the ways models break code while fixing: batch edits, context rot, test tampering, and retry loops.
 - **Token-Efficient** - Scan first, read only what the tools point at, load one guide at a time, group repeated findings. Fewer tokens and better accuracy on any model.
 - **AI-Code Aware** - Dedicated guide for hallucinated APIs, dependency typosquatting/slopsquatting, and test mirroring in AI-generated code.
 - **Test Quality Review** - Tests reviewed as critically as code: teeth, flakiness, over-mocking, coverage vs confidence.
 - **Collaborative Tone** - Questions over commands, suggestions over mandates.
-- **Git Hooks** - [`review-hooks/`](review-hooks/README.md): `commit-msg` and `pre-push` hooks that check branch names, commit messages and secrets with plain code (no AI), plus an optional, isolated AI review that can be advisory or required. Tested on Windows and Linux.
+- **Git Hooks** - [`review-hooks/`](review-hooks/README.md): `commit-msg` and `pre-push` hooks that check branch names, commit messages, secrets and known-vulnerable dependencies with plain code (no AI), plus an optional, isolated AI review that can be advisory or required. Tested on Windows and Linux.
 - **Automation Awareness** - Clearly separates what human review should catch vs. what linters handle.
 
 ---
@@ -377,6 +378,8 @@ code-review-skill/
     +-- test_pr_analyzer.py               # Unit tests, stdlib only
     +-- security-scan.py                  # OWASP-mapped security scanner (repo or --diff)
     +-- test_security_scan.py             # Scanner unit tests
+    +-- dep-audit.py                      # Known-vulnerable dependencies (OSV + CISA KEV + NVD)
+    +-- test_dep_audit.py                 # Dependency audit tests (offline)
     +-- validate_skill.py                 # Self-check: structure, links, entry points, limits
 ```
 
@@ -549,6 +552,7 @@ MIT - see [LICENSE](./LICENSE) · Author/Coder: Kaskobian
 - **Кроссплатформенность** - один навык для любого агента: готовые инструкции для ChatGPT и Claude.ai Projects (включая русские версии), нативная установка для Claude Code и штатные файлы входа для Codex, Cursor, Copilot, Gemini CLI, Windsurf и Cline. Самодостаточный [универсальный промпт](adapters/universal-prompt.md) закрывает ассистентов без доступа к файлам. См. [adapters/README.md](adapters/README.md).
 - **Прогрессивная загрузка** - ядро ~310 строк; языковые руководства (200–1100 строк каждое) загружаются только при необходимости.
 - **OWASP-аудит безопасности** - полная процедура по OWASP Top 10:2025, API Security Top 10:2023 и LLM Top 10:2025. У каждой находки есть категория OWASP и CWE, в конце - отчёт о покрытии по категориям. Опирается на `scripts/security-scan.py`: сканер без зависимостей, 70+ правил с привязкой к OWASP/CWE для 10 языков.
+- **Аудит зависимостей** - `scripts/dep-audit.py` проверяет точные версии из lock-файлов по OSV.dev, отмечает уязвимости из каталога CISA Known Exploited Vulnerabilities и может добавить оценки NIST NVD. Поддерживает npm, pnpm, yarn, NuGet, PyPI, Go, Cargo, Composer, RubyGems и Gradle. Без ИИ, без догадок, без CVE по памяти.
 - **Безопасное исправление** - [план исправлений](reference/remediation-playbook.md): по одной подтверждённой находке за раз. Против типичных сбоев моделей при правках: пакетных изменений, «размывания» контекста, подгонки тестов и бесконечных повторов.
 - **Экономия токенов** - сначала сканер, затем чтение только указанного кода, по одному руководству за раз, повторяющиеся находки группируются.
 - **Самопроверка** - `python scripts/validate_skill.py` проверяет структуру, целостность ссылок, файлы входа для всех платформ, лимиты символов адаптеров и запускает тесты скрипта.
@@ -560,7 +564,7 @@ MIT - see [LICENSE](./LICENSE) · Author/Coder: Kaskobian
 - **Ревью ИИ-кода** - отдельное руководство: галлюцинированные API, typosquatting/slopsquatting зависимостей, зеркалирование реализации в тестах.
 - **Качество тестов** - тесты ревьюятся так же строго, как код: работоспособность, нестабильность, чрезмерные моки, покрытие против уверенности.
 - **Совместный тон** - вопросы вместо приказов, предложения вместо директив.
-- **Git-хуки** - [`review-hooks/`](review-hooks/README.md): хуки `commit-msg` и `pre-push` проверяют имена веток, сообщения коммитов и секреты обычным кодом (без ИИ), плюс необязательное изолированное ИИ-ревью (рекомендательное или обязательное). Проверено на Windows и Linux.
+- **Git-хуки** - [`review-hooks/`](review-hooks/README.md): хуки `commit-msg` и `pre-push` проверяют имена веток, сообщения коммитов, секреты и уязвимые версии зависимостей обычным кодом (без ИИ), плюс необязательное изолированное ИИ-ревью (рекомендательное или обязательное). Проверено на Windows и Linux.
 - **Разделение с автоматикой** - чёткая граница между тем, что ловит ревью, и тем, что обрабатывают линтеры.
 
 ---

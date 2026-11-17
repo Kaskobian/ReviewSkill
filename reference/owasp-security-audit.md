@@ -43,7 +43,7 @@ python scripts/security-scan.py src --json --min-confidence medium
 python scripts/security-scan.py --list-rules          # what it checks
 ```
 
-Also run the ecosystem's dependency audit if the environment allows: `npm audit`, `pip-audit`, `cargo audit`, `govulncheck ./...`, `bundle audit`, `composer audit`, `dotnet list package --vulnerable`, `mvn org.owasp:dependency-check-maven:check`. Report the real output. If they weren't run, say "dependency audit: not run (reason)".
+Run `scripts/dep-audit.py <path>` for known-vulnerable dependency versions. It reads lock files and manifests (npm, pnpm, yarn, NuGet, PyPI, Go, Cargo, Composer, RubyGems, Gradle), checks the exact pinned versions against OSV.dev, marks CVEs in the CISA Known Exploited Vulnerabilities catalog, and `--nvd` fills missing CVSS scores from the NIST NVD. Report its real output, and treat a KEV entry as 🔴 when the vulnerable code path is reachable. If it can't run (no network), say so; never list CVEs from memory. The ecosystem tools are a cross-check when the environment allows: `npm audit`, `pip-audit`, `cargo audit`, `govulncheck ./...`, `bundle audit`, `composer audit`, `dotnet list package --vulnerable`, `mvn org.owasp:dependency-check-maven:check`. Report the real output. If they weren't run, say "dependency audit: not run (reason)".
 
 The scanner produces **candidates**, never findings. It's pattern-based: it can't see whether input is attacker-controlled, and it can't see logic flaws at all. Broken authorization, the #1 category, is mostly invisible to it. Budget most of your manual time for §4 A01 and A06.
 
@@ -104,7 +104,7 @@ The most common serious flaw, and the hardest for tools to see. SSRF now lives h
 ### A03:2025 Software Supply Chain Failures
 - [ ] Every new dependency exists under exactly that name, has credible history, and is needed. Typosquatting/slopsquatting checks are in the [AI-Generated Code Guide](ai-generated-code-review.md).
 - [ ] Lockfile committed and consistent with the manifest; no `*`/`latest` versions [SUP-UNPINNED-DEP].
-- [ ] Known-vulnerable versions: run the dependency audit (§2) and report real results.
+- [ ] Known-vulnerable versions: run `scripts/dep-audit.py` (§2) and report real results; anything in CISA KEV first [DEP-KNOWN-VULN].
 - [ ] Single trusted package index; no `--extra-index-url` dependency-confusion setups [SUP-EXTRA-INDEX].
 - [ ] CI: third-party actions pinned to a commit SHA; least-privilege `permissions:`; secrets not exposed to fork PRs (`pull_request_target` with checkout of PR code is a 🔴) [SUP-ACTION-UNPINNED].
 - [ ] No `curl | sh` installers in build or Dockerfiles [SUP-PIPE-TO-SHELL].

@@ -1,14 +1,16 @@
 #!/usr/bin/env node
 // review-hooks/bin/review-hooks.mjs - Node.js 20+, no dependencies.
 //
-//   review-hooks check            branch name, commit messages, secrets, AI review status
+//   review-hooks check            branch name, commit messages, secrets, vulnerable deps, AI review status
+//   review-hooks deps             known-vulnerable dependencies only (--verbose, --json)
 //   review-hooks review           run the (optional) AI review of this branch now
 //   review-hooks status           show the last AI review for this branch
 //   review-hooks msg <file>       check one commit message (used by commit-msg)
 //   review-hooks pre-push         used by the pre-push hook (reads refs on stdin)
 //   review-hooks install | uninstall
 //
-// Add --json to check/status for machine-readable output.
+// Add --json to check/status/deps for machine-readable output; --no-deps skips the
+// network dependency check (also REVIEW_HOOKS_NO_DEPS=1, e.g. for one push).
 // Exit codes: 0 ok, 1 a check failed, 2 usage or setup error.
 import fs from "node:fs";
 import path from "node:path";
@@ -17,6 +19,8 @@ import { git, tryGit, ZERO, repoRoot, currentBranch, loadConfig, readReviewState
 import { checkBranchName, checkCommitMessage, cleanMessage } from "../lib/rules.mjs";
 import { scanDiffForSecrets, describeSecretHits } from "../lib/secrets.mjs";
 import { runReview } from "../lib/review.mjs";
+import { checkDependencies, summarize, formatReport, defaultCacheDir } from "../lib/deps/check.mjs";
+import { isDependencyFile } from "../lib/deps/lockfiles.mjs";
 
 const kitDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const color = process.stdout.isTTY && !process.env.NO_COLOR;
@@ -31,7 +35,30 @@ function commitsIn(range) {
     .map(s => { const [sha, ...msg] = s.split("\x1f"); return { sha, message: msg.join("\x1f") }; });
 }
 
-function rangeChecks({ cfg, branch, from, to, aiGate, allowAutosquash }) {
+const depsEnabled = (cfg, argv = []) =>
+  cfg.dependencies?.enabled !== false && !argv.includes("--no-deps") && process.env.REVIEW_HOOKS_NO_DEPS !== "1";
+
+/** Did any dependency file change between two commits? */
+function depFilesChanged(from, to) {
+  const out = tryGit(["diff", "--name-only", "-z", from || "4b825dc642cb6eb9a060e54bf8d69288fbee4904", to]) || "";
+  return out.split("\0").some(f => f && isDependencyFile(f));
+}
+
+async function depsResult(cfg, base, head) {
+  const report = await checkDependencies({
+    head, base, policy: cfg.dependencies,
+    cacheDir: defaultCacheDir(git(["rev-parse", "--absolute-git-dir"])),
+    apiKey: process.env.NVD_API_KEY,
+  });
+  return {
+    status: report.status, name: "No known-vulnerable dependencies introduced", detail: summarize(report),
+    fix: report.status === "pass" ? undefined
+      : report.status === "fail" ? "upgrade to the version shown; details: review-hooks deps"
+      : "details: review-hooks deps",
+  };
+}
+
+async function rangeChecks({ cfg, branch, from, to, aiGate, allowAutosquash, deps = true, depsOnlyIfChanged = false }) {
   const results = [];
   const add = (status, name, detail, fix) => results.push({ status, name, detail, fix });
 
@@ -60,6 +87,16 @@ function rangeChecks({ cfg, branch, from, to, aiGate, allowAutosquash }) {
       hits.length ? "remove them from history (git rebase -i), rotate them if real, or add fixture paths to secretsAllow" : undefined);
   }
 
+  // Known-vulnerable dependency versions (OSV.dev + CISA KEV + optional NVD).
+  // Only versions this range introduces can fail. On push, skip the network
+  // entirely when no dependency file changed: nothing new can be introduced.
+  if (deps && !(depsOnlyIfChanged && !depFilesChanged(from, to))) {
+    try { results.push(await depsResult(cfg, from, to)); }
+    catch (e) {
+      add("warn", "No known-vulnerable dependencies introduced", "not checked: " + String(e.message || e).split("\n")[0], "review-hooks deps");
+    }
+  }
+
   if (cfg.aiReview !== "off" && branch) {
     const f = reviewFreshness(branch, to, cfg.baseBranch);
     const status = f.fresh ? "pass" : (cfg.aiReview === "required" && aiGate ? "fail" : "warn");
@@ -80,16 +117,33 @@ function print(title, results) {
 
 // ── commands ───────────────────────────────────────────────────────────────
 
-function cmdCheck(cfg, json) {
+async function cmdCheck(cfg, json, argv) {
   const branch = currentBranch();
   const head = git(["rev-parse", "HEAD"]);
   const baseOk = tryGit(["rev-parse", "--verify", "--quiet", cfg.baseBranch + "^{commit}"]);
   const base = baseOk && tryGit(["merge-base", cfg.baseBranch, head]);
-  const results = rangeChecks({ cfg, branch, from: base, to: head, aiGate: true, allowAutosquash: false });
+  const results = await rangeChecks({ cfg, branch, from: base, to: head, aiGate: true, allowAutosquash: false, deps: depsEnabled(cfg, argv) });
   if (!baseOk) results.unshift({ status: "warn", name: "Base branch", detail: `${cfg.baseBranch} not found, checked all history`, fix: "git fetch" });
   if (json) console.log(JSON.stringify({ branch, base: cfg.baseBranch, results }, null, 2));
   else print(`review-hooks check: ${branch || "(detached)"} vs ${cfg.baseBranch}`, results);
   return results.some(r => r.status === "fail") ? 1 : 0;
+}
+
+async function cmdDeps(cfg, argv) {
+  const head = git(["rev-parse", "HEAD"]);
+  const baseOk = tryGit(["rev-parse", "--verify", "--quiet", cfg.baseBranch + "^{commit}"]);
+  const base = baseOk ? tryGit(["merge-base", cfg.baseBranch, head]) : null;
+  const report = await checkDependencies({
+    head, base, policy: cfg.dependencies,
+    cacheDir: defaultCacheDir(git(["rev-parse", "--absolute-git-dir"])), apiKey: process.env.NVD_API_KEY,
+  });
+  if (argv.includes("--json")) console.log(JSON.stringify(report, null, 2));
+  else {
+    console.log(`review-hooks deps: ${currentBranch() || "(detached)"} vs ${base ? cfg.baseBranch : "(base not found: everything counts as introduced)"}\n`);
+    console.log(formatReport(report, { verbose: argv.includes("--verbose") }));
+    console.log(`\nResult: ${report.status.toUpperCase()}`);
+  }
+  return report.status === "fail" ? 1 : 0;
 }
 
 async function cmdReview(cfg) {
@@ -126,7 +180,7 @@ function cmdMsg(cfg, file) {
 
 function readStdin() { try { return fs.readFileSync(0, "utf8"); } catch { return ""; } }
 
-function cmdPrePush(cfg) {
+async function cmdPrePush(cfg) {
   // stdin: "<local ref> <local sha> <remote ref> <remote sha>" per line
   let rc = 0;
   for (const line of readStdin().split("\n").map(l => l.trim()).filter(Boolean)) {
@@ -141,9 +195,9 @@ function cmdPrePush(cfg) {
       from = baseOk ? tryGit(["merge-base", cfg.baseBranch, localSha]) : null;
     }
     const isShared = (cfg.allowBranches || []).includes(branch);
-    const results = rangeChecks({
+    const results = await rangeChecks({
       cfg, branch: isShared ? undefined : branch, from, to: localSha,
-      aiGate: !isShared, allowAutosquash: false,
+      aiGate: !isShared, allowAutosquash: false, deps: depsEnabled(cfg), depsOnlyIfChanged: true,
     });
     print(`review-hooks pre-push: ${branch} -> ${remoteRef.replace(/^refs\/heads\//, "")}`, results);
     if (results.some(r => r.status === "fail")) rc = 1;
@@ -185,7 +239,7 @@ function cmdInstall(uninstall) {
 }
 
 const HELP = fs.readFileSync(fileURLToPath(import.meta.url), "utf8").split("\n")
-  .slice(2, 12).map(l => l.replace(/^\/\/ ?/, "")).join("\n");
+  .slice(2, 14).map(l => l.replace(/^\/\/ ?/, "")).join("\n");
 
 async function main(argv) {
   const [cmd, ...rest] = argv;
@@ -194,7 +248,8 @@ async function main(argv) {
   if (cmd === "install" || cmd === "uninstall") return cmdInstall(cmd === "uninstall");
   const cfg = loadConfig();
   switch (cmd) {
-    case "check": return cmdCheck(cfg, json);
+    case "check": return cmdCheck(cfg, json, rest);
+    case "deps": return cmdDeps(cfg, rest);
     case "review": return cmdReview(cfg);
     case "status": return cmdStatus(cfg, json);
     case "msg": return cmdMsg(cfg, rest[0]);

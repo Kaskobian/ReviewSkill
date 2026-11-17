@@ -80,6 +80,8 @@ code-review-skill/
     ├── test_pr_analyzer.py     # Analyzer unit tests (stdlib unittest)
     ├── security-scan.py        # OWASP/CWE-mapped security scanner
     ├── test_security_scan.py   # Scanner unit tests: positive + false-positive case per rule
+    ├── dep-audit.py            # Known-vulnerable dependencies (OSV + CISA KEV + NVD)
+    ├── test_dep_audit.py       # Dependency audit tests (offline, canned API responses)
     └── validate_skill.py       # Package self-check — run before every submit
 ```
 

@@ -39,7 +39,7 @@ Pick the mode from the user's request; default to **full**.
 
 These rules cut token use and keep long reviews accurate on every model:
 
-- **Tools before reading.** For large diffs run `scripts/pr-analyzer.py`; for security run `scripts/security-scan.py`. Then read only the files and lines they point at, plus what you need to trace data flow.
+- **Tools before reading.** For large diffs run `scripts/pr-analyzer.py`; for security run `scripts/security-scan.py`; for dependencies run `scripts/dep-audit.py` (never list CVEs from memory). Then read only the files and lines they point at, plus what you need to trace data flow.
 - **Load one guide at a time**: the guide for the language or category in front of you, not every guide at once.
 - **Verify, then report.** A traced, confirmed finding is worth more than several guesses; label what you couldn't trace as unverified.
 - **Group repeats.** One finding with "also at: file:line, ..." instead of the same finding many times.
@@ -304,6 +304,7 @@ Language-agnostic patterns applicable to all code reviews:
 - [PR Review Template](assets/pr-review-template.md) - PR review comment template
 - [Security Audit Template](assets/security-audit-template.md) - OWASP audit report with coverage table and remediation work list
 - `scripts/security-scan.py` - OWASP-mapped candidate finder for a repo or a diff (stdlib only; `--json`, `--diff`, `--list-rules`)
+- `scripts/dep-audit.py` - Known-vulnerable dependency versions from lock files via OSV.dev, CISA KEV and NVD (stdlib only; `--json`, `--fail-on`, `--nvd`, `--offline`)
 - [Review Checklist](assets/review-checklist.md) - Quick reference checklist
 - [Platform Setup](adapters/README.md) - Installation for Claude Code, Claude.ai, ChatGPT, Gemini, Copilot, Cursor, Windsurf, Cline, and other agents (English and Russian adapters)
 - [Universal Prompt](adapters/universal-prompt.md) - Self-contained reviewer prompt for assistants with no file access

@@ -10,7 +10,7 @@ Use it whenever you are asked to review code, a diff, a PR, tests, architecture,
 3. Use `assets/pr-review-template.md` for full PR reviews and `assets/review-checklist.md` for quick triage.
 4. When asked to audit a whole repository or module (no diff), follow the **Codebase Audit** section of SKILL.md instead of the four phases.
 5. For large diffs, `scripts/pr-analyzer.py` accepts a unified diff on stdin and reports complexity and risk factors (`--json` for machine-readable output, `--no-emoji` for ASCII-only consoles).
-6. **Security audit / OWASP review**: follow [reference/owasp-security-audit.md](reference/owasp-security-audit.md). Run `scripts/security-scan.py <path>` (or `--diff` for a change) first, verify each candidate source → sink, cover OWASP Top 10:2025 A01–A10 (plus API/LLM Top 10 where relevant), tag findings with OWASP category + CWE, and report per-category coverage. Template: `assets/security-audit-template.md`.
+6. **Security audit / OWASP review**: follow [reference/owasp-security-audit.md](reference/owasp-security-audit.md). Run `scripts/security-scan.py <path>` (or `--diff` for a change) and `scripts/dep-audit.py <path>` first, verify each candidate source → sink, cover OWASP Top 10:2025 A01–A10 (plus API/LLM Top 10 where relevant), tag findings with OWASP category + CWE, and report per-category coverage. Template: `assets/security-audit-template.md`.
 7. **Fixing findings**: follow [reference/remediation-playbook.md](reference/remediation-playbook.md). Finish the report first, then fix one finding at a time, most severe first: re-read the code, write a check that fails now, apply the smallest fix, and confirm the check plus existing tests pass. After two failed attempts on one finding, stop and re-diagnose.
 
 ## Efficiency
